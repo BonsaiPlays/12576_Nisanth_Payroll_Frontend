@@ -187,32 +187,66 @@ function PayslipForm() {
     if (!ctc) return;
 
     const effectiveMonth = new Date(ctc.effectiveFrom).getMonth() + 1;
+    const currentYear = new Date().getFullYear();
+    const ctcYear = new Date(ctc.effectiveFrom).getFullYear();
 
-    const releasedMonths = payslips
-      .filter((p) => p.isReleased)
-      .map((p) => p.month);
+    // Only proceed if CTC is for current year
+    if (ctcYear !== currentYear) return;
 
-    const pendingMonths = payslips
-      .filter((p) => (p.status ?? p.Status) === 0 && !p.isReleased)
-      .map((p) => p.month);
+    // Create a map of all months with their highest status
+    const monthStatusMap = {};
+    payslips.forEach((p) => {
+      const month = p.month;
+      // Status priority: released (2) > approved (1) > pending (0)
+      const status = p.isReleased ? 2 : p.status ?? p.Status;
 
-    const approvedButUnreleased = payslips
-      .filter((p) => (p.status ?? p.Status) === 1 && !p.isReleased)
-      .map((p) => p.month);
+      if (!monthStatusMap[month] || status > monthStatusMap[month].status) {
+        monthStatusMap[month] = {
+          status,
+          isReleased: p.isReleased,
+        };
+      }
+    });
 
-    let nextMonth = effectiveMonth;
+    // Find the first month that needs attention
+    let monthToSelect = effectiveMonth;
+    for (let m = effectiveMonth; m <= 12; m++) {
+      const monthData = monthStatusMap[m];
 
-    if (pendingMonths.length > 0) {
-      nextMonth = Math.max(...pendingMonths);
-    } else if (approvedButUnreleased.length > 0) {
-      nextMonth = Math.max(...approvedButUnreleased);
-    } else if (releasedMonths.length > 0) {
-      nextMonth = Math.max(...releasedMonths) + 1;
-    } else {
-      nextMonth = effectiveMonth;
+      // If month has no payslip or has pending status
+      if (!monthData || monthData.status === 0) {
+        monthToSelect = m;
+        break;
+      }
+
+      // If month is approved but not released
+      if (monthData.status === 1 && !monthData.isReleased) {
+        monthToSelect = m;
+        break;
+      }
     }
 
-    setMonth(nextMonth);
+    // If we didn't find any gaps, go to next month after latest
+    if (monthToSelect === effectiveMonth) {
+      const allMonths = Object.keys(monthStatusMap).map(Number);
+      const latestMonth =
+        allMonths.length > 0 ? Math.max(...allMonths) : effectiveMonth - 1;
+      monthToSelect = latestMonth + 1;
+    }
+
+    // Ensure we don't go beyond December
+    monthToSelect = Math.min(monthToSelect, 12);
+
+    // Only update if different from current value
+    if (monthToSelect !== month) {
+      setMonth(monthToSelect);
+    }
+
+    console.log("New Auto-fill decision:", {
+      effectiveMonth,
+      monthStatusMap,
+      selectedMonth: monthToSelect,
+    });
   }, [ctc, payslips]);
 
   // Validate input fields
@@ -275,9 +309,309 @@ function PayslipForm() {
     }
   };
 
+  // return (
+  //   <Box sx={{ p: 3 }}>
+  //     <Typography variant="h5" gutterBottom>
+  //       Generate Payslip
+  //     </Typography>
+
+  //     {!empIdFromParams && (
+  //       <TextField
+  //         select
+  //         fullWidth
+  //         label="Select Employee with Approved CTC"
+  //         value={selectedEmp}
+  //         onChange={(e) => setSelectedEmp(e.target.value)}
+  //         onFocus={async () => {
+  //           try {
+  //             const { data } = await api.get("/hr/employees-with-ctc");
+  //             setEmployees(data || []);
+  //           } catch {
+  //             showSnackbar("Failed to load employees list", "error");
+  //           }
+  //         }}
+  //         margin="normal"
+  //       >
+  //         <MenuItem value="">List of Employees</MenuItem>
+  //         {employees.map((emp) => (
+  //           <MenuItem key={emp.id} value={emp.id}>
+  //             {emp.fullName} ({emp.email}){" "}
+  //             {emp.department ? `- ${emp.department}` : ""}
+  //           </MenuItem>
+  //         ))}
+  //       </TextField>
+  //     )}
+
+  //     {selectedEmp && (
+  //       <>
+  //         {ctc && (
+  //           <Card sx={{ p: 2, mt: 2 }}>
+  //             <Typography variant="subtitle1">Latest Approved CTC</Typography>
+  //             <Typography>
+  //               <b>Basic:</b> ₹{ctc.basic} | <b>HRA:</b> ₹{ctc.hra}
+  //             </Typography>
+  //             <Typography>
+  //               <b>Gross CTC:</b> ₹{ctc.grossCTC}
+  //             </Typography>
+  //             <Typography>
+  //               <b>Tax %:</b> {ctc.taxPercent}%
+  //             </Typography>
+  //             {ctc.allowances?.length > 0 && (
+  //               <>
+  //                 <Typography variant="subtitle2" sx={{ mt: 1 }}>
+  //                   Allowances:
+  //                 </Typography>
+  //                 {ctc.allowances.map((a, i) => (
+  //                   <Typography key={i}>
+  //                     • {a.label}: ₹{a.amount}
+  //                   </Typography>
+  //                 ))}
+  //               </>
+  //             )}
+  //             {ctc.deductions?.length > 0 && (
+  //               <>
+  //                 <Typography variant="subtitle2" sx={{ mt: 1 }}>
+  //                   Deductions:
+  //                 </Typography>
+  //                 {ctc.deductions.map((d, i) => (
+  //                   <Typography key={i}>
+  //                     • {d.label}: ₹{d.amount}
+  //                   </Typography>
+  //                 ))}
+  //               </>
+  //             )}
+  //             <Typography sx={{ mt: 1 }}>
+  //               <b>Effective From:</b> {formatDate(ctc.effectiveFrom)}
+  //             </Typography>
+  //           </Card>
+  //         )}
+
+  //         {!ctc && ctcChecked && (
+  //           <Card sx={{ p: 2, mt: 2 }} variant="outlined">
+  //             <Typography color="warning.main">
+  //               This employee has no approved CTC — payslip cannot be generated
+  //             </Typography>
+  //             <Button sx={{ mt: 1 }} onClick={() => navigate(-1)}>
+  //               Go Back
+  //             </Button>
+  //           </Card>
+  //         )}
+  //       </>
+  //     )}
+
+  //     {(() => {
+  //       if (!ctc) return null;
+  //       const ctcYear = new Date(ctc.effectiveFrom).getFullYear();
+  //       const thisYear = new Date().getFullYear();
+
+  //       if (ctcYear > thisYear) {
+  //         return (
+  //           <Card sx={{ p: 2, mt: 2 }} variant="outlined">
+  //             <Typography color="warning.main">
+  //               This CTC is for next year. Payslip cannot be generated now.
+  //             </Typography>
+  //             <Button sx={{ mt: 1 }} onClick={() => navigate(-1)}>
+  //               Go Back
+  //             </Button>
+  //           </Card>
+  //         );
+  //       }
+  //       if (ctcYear < thisYear) {
+  //         return (
+  //           <Card sx={{ p: 2, mt: 2 }} variant="outlined">
+  //             <Typography color="error.main">
+  //               This CTC is from a past year and is no longer valid. Please
+  //               deprecate it.
+  //             </Typography>
+  //             <Button sx={{ mt: 1 }} onClick={() => navigate(-1)}>
+  //               Go Back
+  //             </Button>
+  //           </Card>
+  //         );
+  //       }
+
+  //       return (
+  //         <Box component="form" onSubmit={submit} sx={{ mt: 3 }}>
+  //           <TextField
+  //             type="number"
+  //             label="Year"
+  //             value={year}
+  //             disabled
+  //             fullWidth
+  //             margin="normal"
+  //           />
+
+  //           <TextField
+  //             select
+  //             fullWidth
+  //             label="Month of Payment"
+  //             value={month}
+  //             onChange={(e) => setMonth(Number(e.target.value))}
+  //             margin="normal"
+  //           >
+  //             {monthOptions.map((m) =>
+  //               m.disabled ? (
+  //                 <Tooltip
+  //                   key={m.value}
+  //                   title={m.tooltip || ""}
+  //                   arrow
+  //                   placement="top"
+  //                   disableInteractive
+  //                 >
+  //                   <span style={{ display: "block", pointerEvents: "auto" }}>
+  //                     <MenuItem
+  //                       key={m.value}
+  //                       value={m.value}
+  //                       disabled
+  //                       style={{ pointerEvents: "none" }}
+  //                       title={m.tooltip}
+  //                     >
+  //                       {m.label}
+  //                     </MenuItem>
+  //                   </span>
+  //                 </Tooltip>
+  //               ) : (
+  //                 <MenuItem key={m.value} value={m.value} title={m.tooltip}>
+  //                   {m.label}
+  //                 </MenuItem>
+  //               )
+  //             )}
+  //           </TextField>
+
+  //           <TextField
+  //             type="number"
+  //             inputProps={{ min: 0, max: 31, step: 1, pattern: "[0-9]*" }}
+  //             label="LOP Days"
+  //             value={lopDays}
+  //             onChange={(e) => setLopDays(Number(e.target.value))}
+  //             fullWidth
+  //             margin="normal"
+  //             required
+  //           />
+
+  //           <NumericFormat
+  //             customInput={TextField}
+  //             label="Override Total Allowances (Optional)"
+  //             fullWidth
+  //             margin="normal"
+  //             value={overrideAllowances}
+  //             thousandSeparator=","
+  //             thousandsGroupStyle="lakh"
+  //             allowNegative={false}
+  //             prefix="₹"
+  //             onValueChange={(vals) => {
+  //               const val = Number(vals.value || 0);
+  //               setOverrideAllowances(val);
+  //             }}
+  //             error={overrideAllowances > baseNetPay}
+  //             helperText={
+  //               overrideAllowances > baseNetPay
+  //                 ? `Overrides allowances cannot exceed Base Net Pay (₹${baseNetPay.toLocaleString(
+  //                     "en-IN"
+  //                   )})`
+  //                 : ""
+  //             }
+  //           />
+
+  //           <NumericFormat
+  //             customInput={TextField}
+  //             label="Override Total Deductions (Optional)"
+  //             fullWidth
+  //             margin="normal"
+  //             value={overrideDeductions}
+  //             thousandSeparator=","
+  //             thousandsGroupStyle="lakh"
+  //             allowNegative={false}
+  //             prefix="₹"
+  //             onValueChange={(vals) => {
+  //               const val = Number(vals.value || 0);
+  //               setOverrideDeductions(val);
+  //             }}
+  //             error={overrideDeductions > baseNetPay}
+  //             helperText={
+  //               overrideDeductions > baseNetPay
+  //                 ? `Overrides deductions cannot exceed Base Net Pay (₹${baseNetPay.toLocaleString(
+  //                     "en-IN"
+  //                   )})`
+  //                 : ""
+  //             }
+  //           />
+
+  //           <Card sx={{ mt: 2, mb: 2 }}>
+  //             <CardHeader title="Payslip Preview" />
+  //             <Divider />
+  //             <CardContent>
+  //               <Typography>
+  //                 <b>Year/Month:</b> {year || "—"} / {month || "—"}
+  //               </Typography>
+  //               <Typography>
+  //                 <b>Basic:</b> ₹{ctc.basic}
+  //               </Typography>
+  //               <Typography>
+  //                 <b>HRA:</b> ₹{ctc.hra}
+  //               </Typography>
+  //               <Typography>
+  //                 <b>Total Allowances:</b> ₹{totalAllowances}
+  //               </Typography>
+  //               <Typography>
+  //                 <b>Total Deductions:</b> ₹{totalDeductions}
+  //               </Typography>
+  //               <Divider sx={{ my: 1 }} />
+  //               <Typography>
+  //                 <b>Gross:</b> ₹{gross}
+  //               </Typography>
+  //               <Typography>
+  //                 <b>Tax ({ctc.taxPercent}%):</b> ₹{tax.toFixed(2)}
+  //               </Typography>
+  //               <Typography>
+  //                 <b>LOP Days:</b> {lopDays || 0} (≈ -₹{lopDeduction.toFixed(2)}
+  //                 )
+  //               </Typography>
+  //               {overridesAllowanceValue > 0 && (
+  //                 <Typography>
+  //                   <b>+ Override Allowances:</b> ₹{overridesAllowanceValue}
+  //                 </Typography>
+  //               )}
+  //               {overridesDeductionValue > 0 && (
+  //                 <Typography>
+  //                   <b>- Override Deductions:</b> ₹{overridesDeductionValue}
+  //                 </Typography>
+  //               )}
+  //               <Typography
+  //                 variant="h6"
+  //                 color={netPay < baseNetPay ? "error.main" : "success.main"}
+  //               >
+  //                 Net Pay: ₹{netPay.toLocaleString("en-IN")}
+  //               </Typography>
+  //               {overrideError && (
+  //                 <Typography color="error.main" variant="body2">
+  //                   {overrideError}
+  //                 </Typography>
+  //               )}
+  //             </CardContent>
+  //           </Card>
+
+  //           <Button
+  //             type="submit"
+  //             variant="contained"
+  //             sx={{ mt: 2 }}
+  //             disabled={
+  //               overrideAllowances > baseNetPay ||
+  //               overrideDeductions > baseNetPay ||
+  //               netPay < 0
+  //             }
+  //           >
+  //             Generate Payslip
+  //           </Button>
+  //         </Box>
+  //       );
+  //     })()}
+  //   </Box>
+  // );
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h5" gutterBottom>
+    <Box sx={{ p: 3 }} data-testid="generate-payslip-page">
+      <Typography variant="h5" gutterBottom data-testid="page-title">
         Generate Payslip
       </Typography>
 
@@ -297,10 +631,17 @@ function PayslipForm() {
             }
           }}
           margin="normal"
+          inputProps={{ "data-testid": "employee-select" }}
         >
-          <MenuItem value="">List of Employees</MenuItem>
+          <MenuItem value="" data-testid="default-employee-option">
+            List of Employees
+          </MenuItem>
           {employees.map((emp) => (
-            <MenuItem key={emp.id} value={emp.id}>
+            <MenuItem
+              key={emp.id}
+              value={emp.id}
+              data-testid={`employee-option-${emp.id}`}
+            >
               {emp.fullName} ({emp.email}){" "}
               {emp.department ? `- ${emp.department}` : ""}
             </MenuItem>
@@ -311,24 +652,30 @@ function PayslipForm() {
       {selectedEmp && (
         <>
           {ctc && (
-            <Card sx={{ p: 2, mt: 2 }}>
-              <Typography variant="subtitle1">Latest Approved CTC</Typography>
-              <Typography>
+            <Card sx={{ p: 2, mt: 2 }} data-testid="ctc-details-card">
+              <Typography variant="subtitle1" data-testid="ctc-title">
+                Latest Approved CTC
+              </Typography>
+              <Typography data-testid="basic-hra-info">
                 <b>Basic:</b> ₹{ctc.basic} | <b>HRA:</b> ₹{ctc.hra}
               </Typography>
-              <Typography>
+              <Typography data-testid="gross-ctc-info">
                 <b>Gross CTC:</b> ₹{ctc.grossCTC}
               </Typography>
-              <Typography>
+              <Typography data-testid="tax-percent-info">
                 <b>Tax %:</b> {ctc.taxPercent}%
               </Typography>
               {ctc.allowances?.length > 0 && (
                 <>
-                  <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ mt: 1 }}
+                    data-testid="allowances-title"
+                  >
                     Allowances:
                   </Typography>
                   {ctc.allowances.map((a, i) => (
-                    <Typography key={i}>
+                    <Typography key={i} data-testid={`allowance-item-${i}`}>
                       • {a.label}: ₹{a.amount}
                     </Typography>
                   ))}
@@ -336,28 +683,40 @@ function PayslipForm() {
               )}
               {ctc.deductions?.length > 0 && (
                 <>
-                  <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ mt: 1 }}
+                    data-testid="deductions-title"
+                  >
                     Deductions:
                   </Typography>
                   {ctc.deductions.map((d, i) => (
-                    <Typography key={i}>
+                    <Typography key={i} data-testid={`deduction-item-${i}`}>
                       • {d.label}: ₹{d.amount}
                     </Typography>
                   ))}
                 </>
               )}
-              <Typography sx={{ mt: 1 }}>
+              <Typography sx={{ mt: 1 }} data-testid="effective-date-info">
                 <b>Effective From:</b> {formatDate(ctc.effectiveFrom)}
               </Typography>
             </Card>
           )}
 
           {!ctc && ctcChecked && (
-            <Card sx={{ p: 2, mt: 2 }} variant="outlined">
-              <Typography color="warning.main">
+            <Card
+              sx={{ p: 2, mt: 2 }}
+              variant="outlined"
+              data-testid="no-ctc-warning"
+            >
+              <Typography color="warning.main" data-testid="warning-message">
                 This employee has no approved CTC — payslip cannot be generated
               </Typography>
-              <Button sx={{ mt: 1 }} onClick={() => navigate(-1)}>
+              <Button
+                sx={{ mt: 1 }}
+                onClick={() => navigate(-1)}
+                data-testid="go-back-button"
+              >
                 Go Back
               </Button>
             </Card>
@@ -372,11 +731,19 @@ function PayslipForm() {
 
         if (ctcYear > thisYear) {
           return (
-            <Card sx={{ p: 2, mt: 2 }} variant="outlined">
-              <Typography color="warning.main">
+            <Card
+              sx={{ p: 2, mt: 2 }}
+              variant="outlined"
+              data-testid="future-ctc-warning"
+            >
+              <Typography color="warning.main" data-testid="future-ctc-message">
                 This CTC is for next year. Payslip cannot be generated now.
               </Typography>
-              <Button sx={{ mt: 1 }} onClick={() => navigate(-1)}>
+              <Button
+                sx={{ mt: 1 }}
+                onClick={() => navigate(-1)}
+                data-testid="go-back-button"
+              >
                 Go Back
               </Button>
             </Card>
@@ -384,12 +751,20 @@ function PayslipForm() {
         }
         if (ctcYear < thisYear) {
           return (
-            <Card sx={{ p: 2, mt: 2 }} variant="outlined">
-              <Typography color="error.main">
+            <Card
+              sx={{ p: 2, mt: 2 }}
+              variant="outlined"
+              data-testid="expired-ctc-warning"
+            >
+              <Typography color="error.main" data-testid="expired-ctc-message">
                 This CTC is from a past year and is no longer valid. Please
                 deprecate it.
               </Typography>
-              <Button sx={{ mt: 1 }} onClick={() => navigate(-1)}>
+              <Button
+                sx={{ mt: 1 }}
+                onClick={() => navigate(-1)}
+                data-testid="go-back-button"
+              >
                 Go Back
               </Button>
             </Card>
@@ -397,7 +772,12 @@ function PayslipForm() {
         }
 
         return (
-          <Box component="form" onSubmit={submit} sx={{ mt: 3 }}>
+          <Box
+            component="form"
+            onSubmit={submit}
+            sx={{ mt: 3 }}
+            data-testid="payslip-form"
+          >
             <TextField
               type="number"
               label="Year"
@@ -405,6 +785,7 @@ function PayslipForm() {
               disabled
               fullWidth
               margin="normal"
+              inputProps={{ "data-testid": "year-input" }}
             />
 
             <TextField
@@ -414,6 +795,7 @@ function PayslipForm() {
               value={month}
               onChange={(e) => setMonth(Number(e.target.value))}
               margin="normal"
+              inputProps={{ "data-testid": "month-select" }}
             >
               {monthOptions.map((m) =>
                 m.disabled ? (
@@ -431,13 +813,19 @@ function PayslipForm() {
                         disabled
                         style={{ pointerEvents: "none" }}
                         title={m.tooltip}
+                        data-testid={`month-option-${m.value}-disabled`}
                       >
                         {m.label}
                       </MenuItem>
                     </span>
                   </Tooltip>
                 ) : (
-                  <MenuItem key={m.value} value={m.value} title={m.tooltip}>
+                  <MenuItem
+                    key={m.value}
+                    value={m.value}
+                    title={m.tooltip}
+                    data-testid={`month-option-${m.value}`}
+                  >
                     {m.label}
                   </MenuItem>
                 )
@@ -446,7 +834,13 @@ function PayslipForm() {
 
             <TextField
               type="number"
-              inputProps={{ min: 0, max: 31, step: 1, pattern: "[0-9]*" }}
+              inputProps={{
+                min: 0,
+                max: 31,
+                step: 1,
+                pattern: "[0-9]*",
+                "data-testid": "lop-days-input",
+              }}
               label="LOP Days"
               value={lopDays}
               onChange={(e) => setLopDays(Number(e.target.value))}
@@ -477,6 +871,11 @@ function PayslipForm() {
                     )})`
                   : ""
               }
+              inputProps={{ "data-testid": "override-allowances-input" }}
+              FormHelperTextProps={{
+                "data-testid": "override-allowances-error",
+                role: "alert",
+              }}
             />
 
             <NumericFormat
@@ -501,62 +900,74 @@ function PayslipForm() {
                     )})`
                   : ""
               }
+              inputProps={{ "data-testid": "override-deductions-input" }}
+              FormHelperTextProps={{
+                "data-testid": "override-deductions-error",
+                role: "alert",
+              }}
             />
 
-            <Card sx={{ mt: 2, mb: 2 }}>
-              <CardHeader title="Payslip Preview" />
-              <Divider />
-              <CardContent>
-                <Typography>
+            <Card sx={{ mt: 2, mb: 2 }} data-testid="payslip-preview-card">
+              <CardHeader
+                title="Payslip Preview"
+                data-testid="payslip-preview-title"
+              />
+              <Divider data-testid="payslip-preview-divider" />
+              <CardContent data-testid="payslip-preview-content">
+                <Typography data-testid="year-month-preview">
                   <b>Year/Month:</b> {year || "—"} / {month || "—"}
                 </Typography>
-                <Typography>
+                <Typography data-testid="basic-preview">
                   <b>Basic:</b> ₹{ctc.basic}
                 </Typography>
-                <Typography>
+                <Typography data-testid="hra-preview">
                   <b>HRA:</b> ₹{ctc.hra}
                 </Typography>
-                <Typography>
+                <Typography data-testid="total-allowances-preview">
                   <b>Total Allowances:</b> ₹{totalAllowances}
                 </Typography>
-                <Typography>
+                <Typography data-testid="total-deductions-preview">
                   <b>Total Deductions:</b> ₹{totalDeductions}
                 </Typography>
-                <Divider sx={{ my: 1 }} />
-                <Typography>
+                <Divider sx={{ my: 1 }} data-testid="preview-divider" />
+                <Typography data-testid="gross-preview">
                   <b>Gross:</b> ₹{gross}
                 </Typography>
-                <Typography>
+                <Typography data-testid="tax-preview">
                   <b>Tax ({ctc.taxPercent}%):</b> ₹{tax.toFixed(2)}
                 </Typography>
-                <Typography>
+                <Typography data-testid="lop-days-preview">
                   <b>LOP Days:</b> {lopDays || 0} (≈ -₹{lopDeduction.toFixed(2)}
                   )
                 </Typography>
                 {overridesAllowanceValue > 0 && (
-                  <Typography>
+                  <Typography data-testid="override-allowances-preview">
                     <b>+ Override Allowances:</b> ₹{overridesAllowanceValue}
                   </Typography>
                 )}
                 {overridesDeductionValue > 0 && (
-                  <Typography>
+                  <Typography data-testid="override-deductions-preview">
                     <b>- Override Deductions:</b> ₹{overridesDeductionValue}
                   </Typography>
                 )}
                 <Typography
                   variant="h6"
                   color={netPay < baseNetPay ? "error.main" : "success.main"}
+                  data-testid="net-pay-preview"
                 >
                   Net Pay: ₹{netPay.toLocaleString("en-IN")}
                 </Typography>
                 {overrideError && (
-                  <Typography color="error.main" variant="body2">
+                  <Typography
+                    color="error.main"
+                    variant="body2"
+                    data-testid="override-error-message"
+                  >
                     {overrideError}
                   </Typography>
                 )}
               </CardContent>
             </Card>
-
             <Button
               type="submit"
               variant="contained"
@@ -566,6 +977,7 @@ function PayslipForm() {
                 overrideDeductions > baseNetPay ||
                 netPay < 0
               }
+              data-testid="generate-payslip-button"
             >
               Generate Payslip
             </Button>

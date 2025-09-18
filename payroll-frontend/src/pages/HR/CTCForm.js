@@ -96,14 +96,17 @@ function CTCForm() {
     const fetchEmployees = async () => {
       try {
         const res = await api.get(
-          `/hr/employees?page=${page}&pageSize=${pageSize}`
+          `/hr/employees?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(
+            searchTerm
+          )}`
         );
-        const items = res.data.items || [];
-        setEmployees(items);
+
+        setEmployees(res.data.items || []);
         setTotalCount(res.data.total || 0);
 
-        if (empId && items.length > 0) {
-          const match = items.find((e) => e.id === empId);
+        // If we're in single-employee mode (empId query param), hydrate employee name
+        if (empId && (res.data.items || []).length > 0) {
+          const match = res.data.items.find((e) => e.id === empId);
           if (match) setEmployeeName(match.fullName);
         }
       } catch {
@@ -112,7 +115,7 @@ function CTCForm() {
     };
 
     fetchEmployees();
-  }, [page, pageSize, empId]);
+  }, [page, pageSize, empId, searchTerm]);
 
   const toggleEmployee = (id) => {
     id = Number(id);
@@ -164,10 +167,31 @@ function CTCForm() {
     }
   }, [hra, basic]);
 
-  const addAllowance = () =>
+  //Real time validation for allowances and deductions
+  const addAllowance = () => {
     setAllowances([...allowances, { label: "", amount: "" }]);
-  const addDeduction = () =>
+
+    // Clear any existing errors for the new allowance
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[`allowance_label_${allowances.length}`];
+      delete newErrors[`allowance_amount_${allowances.length}`];
+      return newErrors;
+    });
+  };
+
+  const addDeduction = () => {
     setDeductions([...deductions, { label: "", amount: "" }]);
+
+    // Clear any existing errors for the new deduction
+    setErrors((prev) => {
+      const newErrors = { ...prev };
+      delete newErrors[`deduction_label_${deductions.length}`];
+      delete newErrors[`deduction_amount_${deductions.length}`];
+      return newErrors;
+    });
+  };
+
   const removeAllowance = (index) => {
     const copy = [...allowances];
     copy.splice(index, 1);
@@ -373,25 +397,53 @@ function CTCForm() {
 
   //Allows and deducts Validation
   useEffect(() => {
-    // whenever allowances or deductions list changes, run a lightweight validate
     const errs = {};
 
+    // Validate allowances
     allowances.forEach((a, i) => {
-      if (!a.label.trim()) errs[`allowance_label_${i}`] = "Label required";
-      if (a.amount === "" || isNaN(a.amount) || +a.amount < 0)
+      if (!a.label.trim()) {
+        errs[`allowance_label_${i}`] = "Label required";
+      } else {
+        // Clear label error if valid
+        delete errs[`allowance_label_${i}`];
+      }
+
+      if (a.amount === "" || isNaN(a.amount) || +a.amount < 0) {
         errs[`allowance_amount_${i}`] = "Invalid amount";
+      } else {
+        // Clear amount error if valid
+        delete errs[`allowance_amount_${i}`];
+      }
     });
 
+    // Validate deductions
     deductions.forEach((d, i) => {
-      if (!d.label.trim()) errs[`deduction_label_${i}`] = "Label required";
-      if (d.amount === "" || isNaN(d.amount) || +d.amount < 0)
+      if (!d.label.trim()) {
+        errs[`deduction_label_${i}`] = "Label required";
+      } else {
+        // Clear label error if valid
+        delete errs[`deduction_label_${i}`];
+      }
+
+      if (d.amount === "" || isNaN(d.amount) || +d.amount < 0) {
         errs[`deduction_amount_${i}`] = "Invalid amount";
+      } else {
+        // Clear amount error if valid
+        delete errs[`deduction_amount_${i}`];
+      }
     });
 
     setErrors((prev) => {
-      // keep other error keys (hra, allowances totals, etc.)
-      const { ...rest } = prev;
-      return { ...rest, ...errs };
+      // First, clear all existing allowance/deduction errors
+      const newErrors = Object.keys(prev).reduce((acc, key) => {
+        if (!key.startsWith("allowance_") && !key.startsWith("deduction_")) {
+          acc[key] = prev[key];
+        }
+        return acc;
+      }, {});
+
+      // Then merge with new errors
+      return { ...newErrors, ...errs };
     });
   }, [allowances, deductions]);
 
@@ -552,16 +604,23 @@ function CTCForm() {
   const isDisabled = hasErrors || isBasicInvalid;
 
   return (
-    <Box sx={{ p: 3, display: "flex", flexDirection: "column" }}>
-      <Typography variant="h5" gutterBottom>
+    <Box
+      sx={{ p: 3, display: "flex", flexDirection: "column" }}
+      data-testid="ctc-form-container"
+    >
+      <Typography variant="h5" gutterBottom data-testid="ctc-form-title">
         {empId
           ? `Create CTC for ${employeeName || `Employee #${empId}`}`
           : "Apply CTC to Employees"}
       </Typography>
 
       {!empId && (
-        <Box mb={2}>
-          <Button variant="outlined" onClick={() => setShowModal(true)}>
+        <Box mb={2} data-testid="employee-selection-section">
+          <Button
+            variant="outlined"
+            onClick={() => setShowModal(true)}
+            data-testid="select-employees-button"
+          >
             Select Employees
           </Button>
           {selectedEmployees.length > 0 && (
@@ -570,6 +629,7 @@ function CTCForm() {
               color="info.main"
               component="span"
               sx={{ ml: 2 }}
+              data-testid="selected-employees-count"
             >
               {selectedEmployees.length} selected
             </Typography>
@@ -578,7 +638,7 @@ function CTCForm() {
       )}
 
       {/* Form Section */}
-      <Box component="form" onSubmit={handleFormSubmit}>
+      <Box component="form" onSubmit={handleFormSubmit} data-testid="ctc-form">
         <NumericFormat
           customInput={TextField}
           label="Basic"
@@ -592,9 +652,10 @@ function CTCForm() {
           onValueChange={(vals) => setBasic(vals.value)}
           error={!!errors.basic}
           helperText={errors.basic}
+          inputProps={{ "data-testid": "basic-input" }}
           FormHelperTextProps={{
             "data-testid": "basic-error",
-            role: 'alert'
+            role: "alert",
           }}
         />
 
@@ -617,6 +678,11 @@ function CTCForm() {
           error={!!errors.hra}
           helperText={errors.hra}
           disabled={!basic}
+          inputProps={{ "data-testid": "hra-input" }}
+          FormHelperTextProps={{
+            "data-testid": "hra-error",
+            role: "alert",
+          }}
         />
 
         <LocalizationProvider dateAdapter={AdapterDateFns}>
@@ -632,22 +698,38 @@ function CTCForm() {
                 margin: "normal",
                 error: !!errors.effectiveFrom,
                 helperText: errors.effectiveFrom,
+                inputProps: { "data-testid": "effective-date-input" },
+                FormHelperTextProps: {
+                  "data-testid": "effective-date-error",
+                  role: "alert",
+                },
               },
             }}
-            disablePast // blocks all past dates
+            disablePast
           />
         </LocalizationProvider>
 
-        <Typography variant="h6" mt={2}>
+        <Typography variant="h6" mt={2} data-testid="allowances-section-title">
           Allowances
         </Typography>
         {errors.totalAllowances && (
-          <Typography color="error" variant="body2">
+          <Typography
+            color="error"
+            variant="body2"
+            data-testid="allowances-error"
+          >
             {errors.totalAllowances}
           </Typography>
         )}
         {allowances.map((a, i) => (
-          <Grid container spacing={2} alignItems="center" key={i} mb={1}>
+          <Grid
+            container
+            spacing={2}
+            alignItems="center"
+            key={i}
+            mb={1}
+            data-testid={`allowance-row-${i}`}
+          >
             <Grid item xs={5}>
               <TextField
                 placeholder="Label"
@@ -656,6 +738,11 @@ function CTCForm() {
                 onChange={(e) => handleAllowanceLabelChange(e.target.value, i)}
                 error={!!errors[`allowance_label_${i}`]}
                 helperText={errors[`allowance_label_${i}`]}
+                inputProps={{ "data-testid": `allowance-label-${i}` }}
+                FormHelperTextProps={{
+                  "data-testid": `allowance-label-error-${i}`,
+                  role: "alert",
+                }}
               />
             </Grid>
             <Grid item xs={5}>
@@ -675,6 +762,11 @@ function CTCForm() {
                 }}
                 error={!!errors[`allowance_amount_${i}`]}
                 helperText={errors[`allowance_amount_${i}`]}
+                inputProps={{ "data-testid": `allowance-amount-${i}` }}
+                FormHelperTextProps={{
+                  "data-testid": `allowance-amount-error-${i}`,
+                  role: "alert",
+                }}
               />
             </Grid>
             <Grid item xs={2}>
@@ -690,27 +782,38 @@ function CTCForm() {
         ))}
         <Tooltip title={!basic ? "Enter Basic Pay first" : "Add Allowance"}>
           <span>
-            {" "}
             <Button
               startIcon={<AddIcon />}
               onClick={addAllowance}
               disabled={!basic}
+              data-testid="add-allowance-button"
             >
               Add Allowance
             </Button>
           </span>
         </Tooltip>
 
-        <Typography variant="h6" mt={2}>
+        <Typography variant="h6" mt={2} data-testid="deductions-section-title">
           Deductions
         </Typography>
         {errors.totalDeductions && (
-          <Typography color="error" variant="body2">
+          <Typography
+            color="error"
+            variant="body2"
+            data-testid="deductions-error"
+          >
             {errors.totalDeductions}
           </Typography>
         )}
         {deductions.map((d, i) => (
-          <Grid container spacing={2} alignItems="center" key={i} mb={1}>
+          <Grid
+            container
+            spacing={2}
+            alignItems="center"
+            key={i}
+            mb={1}
+            data-testid={`deduction-row-${i}`}
+          >
             <Grid item xs={5}>
               <TextField
                 placeholder="Label"
@@ -719,6 +822,11 @@ function CTCForm() {
                 onChange={(e) => handleDeductionLabelChange(e.target.value, i)}
                 error={!!errors[`deduction_label_${i}`]}
                 helperText={errors[`deduction_label_${i}`]}
+                inputProps={{ "data-testid": `deduction-label-${i}` }}
+                FormHelperTextProps={{
+                  "data-testid": `deduction-label-error-${i}`,
+                  role: "alert",
+                }}
               />
             </Grid>
             <Grid item xs={5}>
@@ -738,10 +846,19 @@ function CTCForm() {
                 }}
                 error={!!errors[`deduction_amount_${i}`]}
                 helperText={errors[`deduction_amount_${i}`]}
+                inputProps={{ "data-testid": `deduction-amount-${i}` }}
+                FormHelperTextProps={{
+                  "data-testid": `deduction-amount-error-${i}`,
+                  role: "alert",
+                }}
               />
             </Grid>
             <Grid item xs={2}>
-              <IconButton color="error" onClick={() => removeDeduction(i)}>
+              <IconButton
+                color="error"
+                onClick={() => removeDeduction(i)}
+                data-testid={`delete-deduction-${i}`}
+              >
                 <DeleteIcon />
               </IconButton>
             </Grid>
@@ -753,6 +870,7 @@ function CTCForm() {
               startIcon={<AddIcon />}
               onClick={addDeduction}
               disabled={!basic}
+              data-testid="add-deduction-button"
             >
               Add Deduction
             </Button>
@@ -782,6 +900,7 @@ function CTCForm() {
             readOnly: true,
           }}
           disabled
+          inputProps={{ "data-testid": "tax-percent-display" }}
           helperText={
             gross <= 400000
               ? "No tax applied up to ₹4L"
@@ -791,42 +910,49 @@ function CTCForm() {
           }
         />
 
-        <Card sx={{ mt: 2, mb: 2 }}>
-          <CardHeader title="CTC Preview" />
-          <Divider />
-          <CardContent>
-            <Typography>
+        <Card sx={{ mt: 2, mb: 2 }} data-testid="ctc-preview-card">
+          <CardHeader title="CTC Preview" data-testid="ctc-preview-title" />
+          <Divider data-testid="ctc-preview-divider" />
+          <CardContent data-testid="ctc-preview-content">
+            <Typography data-testid="basic-preview">
               <b>Basic:</b> {formatINR(basic || 0)}
             </Typography>
-            <Typography>
+            <Typography data-testid="hra-preview">
               <b>HRA:</b> {formatINR(hra || 0)}
             </Typography>
-            <Typography>
+            <Typography data-testid="total-allowances-preview">
               <b>Total Allowances:</b> {formatINR(totalAllowances)}
             </Typography>
-            <Typography>
+            <Typography data-testid="total-deductions-preview">
               <b>Total Deductions:</b> {formatINR(totalDeductions)}
             </Typography>
-            <Divider sx={{ my: 1 }} />
-            <Typography>
+            <Divider sx={{ my: 1 }} data-testid="ctc-preview-divider-2" />
+            <Typography data-testid="gross-ctc-preview">
               <b>Gross CTC:</b> {formatINR(gross)}
             </Typography>
-            <Typography>
+            <Typography data-testid="tax-preview">
               <b>Tax ({taxPercent || 0}%):</b> {formatINR(isNaN(tax) ? 0 : tax)}
             </Typography>
             <Typography
               variant="h6"
               color={net < 0 ? "error.main" : "success.main"}
+              data-testid="net-ctc-preview"
             >
               Net CTC: {formatINR(isNaN(net) ? 0 : net)}
             </Typography>
             {effectiveFrom && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                data-testid="effective-date-preview"
+              >
                 Effective From: {formatDate(effectiveFrom)}
               </Typography>
             )}
             {errors._summary && (
-              <Typography color="error">{errors._summary}</Typography>
+              <Typography color="error" data-testid="summary-error">
+                {errors._summary}
+              </Typography>
             )}
           </CardContent>
         </Card>
@@ -836,6 +962,7 @@ function CTCForm() {
           variant="contained"
           sx={{ mt: 2 }}
           disabled={isDisabled}
+          data-testid="submit-ctc-button"
         >
           Apply CTC
         </Button>
@@ -847,21 +974,28 @@ function CTCForm() {
         maxWidth="md"
         open={showModal}
         onClose={() => setShowModal(false)}
+        data-testid="employee-selection-modal"
       >
-        <DialogTitle>Select Employees</DialogTitle>
-        <DialogContent>
+        <DialogTitle data-testid="employee-selection-modal-title">
+          Select Employees
+        </DialogTitle>
+        <DialogContent data-testid="employee-selection-modal-content">
           <TextField
             fullWidth
             label="Search employees"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setPage(1); // reset to first page on new search
+              setPage(1);
             }}
             margin="normal"
+            inputProps={{ "data-testid": "employee-search-input" }}
           />
-          <Box sx={{ maxHeight: 400, overflowY: "auto" }}>
-            <FormGroup>
+          <Box
+            sx={{ maxHeight: 400, overflowY: "auto" }}
+            data-testid="employee-list-container"
+          >
+            <FormGroup data-testid="employee-checkbox-group">
               {employees.map((emp) => (
                 <FormControlLabel
                   key={emp.id}
@@ -869,42 +1003,66 @@ function CTCForm() {
                     <Checkbox
                       checked={selectedEmployees.includes(emp.id)}
                       onChange={() => toggleEmployee(emp.id)}
+                      data-testid={`employee-checkbox-${emp.id}`}
                     />
                   }
                   label={`${emp.fullName} (${emp.email})`}
+                  data-testid={`employee-label-${emp.id}`}
                 />
               ))}
             </FormGroup>
 
             {employees.length === 0 && (
-              <Typography>No employees found.</Typography>
+              <Typography data-testid="no-employees-message">
+                No employees found.
+              </Typography>
             )}
           </Box>
 
           {/* Pagination bar */}
-          <Box display="flex" justifyContent="space-between" mt={2}>
+          <Box
+            display="flex"
+            justifyContent="space-between"
+            mt={2}
+            data-testid="employee-pagination"
+          >
             <Button
               disabled={page === 1}
               onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              data-testid="prev-employee-page-button"
             >
               Previous
             </Button>
 
-            <Typography variant="body2" align="center">
+            <Typography
+              variant="body2"
+              align="center"
+              data-testid="employee-page-info"
+            >
               Page {page} of {Math.ceil(total / pageSize) || 1}
             </Typography>
 
             <Button
               disabled={page >= Math.ceil(total / pageSize)}
               onClick={() => setPage((p) => p + 1)}
+              data-testid="next-employee-page-button"
             >
               Next
             </Button>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowModal(false)}>Cancel</Button>
-          <Button onClick={() => setShowModal(false)} variant="contained">
+        <DialogActions data-testid="employee-selection-modal-actions">
+          <Button
+            onClick={() => setShowModal(false)}
+            data-testid="cancel-employee-selection-button"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => setShowModal(false)}
+            variant="contained"
+            data-testid="confirm-employee-selection-button"
+          >
             Done
           </Button>
         </DialogActions>
@@ -915,62 +1073,87 @@ function CTCForm() {
         aria-labelledby="confirm-ctc-title"
         open={showConfirm}
         onClose={() => setShowConfirm(false)}
+        data-testid="confirm-submission-modal"
       >
-        <DialogTitle>Confirm CTC Submission</DialogTitle>
-        <DialogContent>
-          <Typography>
+        <DialogTitle data-testid="confirm-submission-title">
+          Confirm CTC Submission
+        </DialogTitle>
+        <DialogContent data-testid="confirm-submission-content">
+          <Typography data-testid="confirm-submission-message">
             Are you sure you want to submit this CTC for{" "}
             {selectedEmployees.length} employee(s)?
           </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowConfirm(false)}>Cancel</Button>
-          <Button variant="contained" onClick={confirmSubmit}>
+        <DialogActions data-testid="confirm-submission-actions">
+          <Button
+            onClick={() => setShowConfirm(false)}
+            data-testid="cancel-submission-button"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={confirmSubmit}
+            data-testid="confirm-submission-button"
+          >
             Yes, Submit
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/*Result Display Modal*/}
+      {/* Result Display Modal */}
       <Dialog
         open={showResultsModal}
         onClose={() => setShowResultsModal(false)}
         fullWidth
         maxWidth="md"
+        data-testid="results-modal"
       >
-        <DialogTitle>Batch CTC Results</DialogTitle>
-        <DialogContent dividers>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Employee</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Message</TableCell>
+        <DialogTitle data-testid="results-modal-title">
+          Batch CTC Results
+        </DialogTitle>
+        <DialogContent dividers data-testid="results-modal-content">
+          <Table size="small" data-testid="results-table">
+            <TableHead data-testid="results-table-header">
+              <TableRow data-testid="results-header-row">
+                <TableCell data-testid="employee-name-header">
+                  Employee
+                </TableCell>
+                <TableCell data-testid="employee-email-header">Email</TableCell>
+                <TableCell data-testid="status-header">Status</TableCell>
+                <TableCell data-testid="message-header">Message</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody>
+            <TableBody data-testid="results-table-body">
               {batchResults.map((r, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>{r.employee || `#${r.employeeId}`}</TableCell>
-                  <TableCell>{r.email || "-"}</TableCell>
+                <TableRow key={idx} data-testid={`result-row-${idx}`}>
+                  <TableCell data-testid={`employee-name-${idx}`}>
+                    {r.employee || `#${r.employeeId}`}
+                  </TableCell>
+                  <TableCell data-testid={`employee-email-${idx}`}>
+                    {r.email || "-"}
+                  </TableCell>
                   <TableCell
                     style={{ color: r.status === "Conflict" ? "red" : "green" }}
+                    data-testid={`status-${idx}`}
                   >
                     {r.status}
                   </TableCell>
-                  <TableCell>{r.message}</TableCell>
+                  <TableCell data-testid={`message-${idx}`}>
+                    {r.message}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </DialogContent>
-        <DialogActions>
+        <DialogActions data-testid="results-modal-actions">
           <Button
             onClick={() => {
               setShowResultsModal(false);
               setTimeout(() => navigate(-1), 1000);
             }}
+            data-testid="close-results-modal-button"
           >
             Close
           </Button>

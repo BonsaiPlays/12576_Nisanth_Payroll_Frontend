@@ -244,22 +244,29 @@ function Approvals() {
   return (
     <Box
       sx={{ p: 3, display: "flex", flexDirection: "column", height: "100%" }}
+      data-testid="approvals-page"
     >
-      <Typography variant="h5" gutterBottom>
+      <Typography variant="h5" gutterBottom data-testid="approvals-title">
         HR Manager Approvals
       </Typography>
 
       {/* Toggle + Search + Export */}
-      <Box display="flex" justifyContent="space-between" mb={2}>
-        <Box display="flex" gap={1}>
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        mb={2}
+        data-testid="approvals-controls"
+      >
+        <Box display="flex" gap={1} data-testid="view-type-toggle">
           <Button
             variant={viewType === "payslips" ? "contained" : "outlined"}
             onClick={() => {
               setViewType("payslips");
-              setAllRecords([]); // Clear cached records
+              setAllRecords([]);
               setPage(0);
               setSearch("");
             }}
+            data-testid="payslips-view-button"
           >
             Payslips
           </Button>
@@ -267,15 +274,16 @@ function Approvals() {
             variant={viewType === "ctcs" ? "contained" : "outlined"}
             onClick={() => {
               setViewType("ctcs");
-              setAllRecords([]); // Clear cached records
+              setAllRecords([]);
               setPage(0);
               setSearch("");
             }}
+            data-testid="ctcs-view-button"
           >
             CTCs
           </Button>
         </Box>
-        <Box display="flex" gap={1}>
+        <Box display="flex" gap={1} data-testid="search-export-controls">
           <TextField
             size="small"
             placeholder="Search..."
@@ -284,6 +292,7 @@ function Approvals() {
               setSearch(e.target.value);
               setPage(0);
             }}
+            inputProps={{ "data-testid": "search-input" }}
           />
           <Button
             variant="outlined"
@@ -292,6 +301,7 @@ function Approvals() {
               setSearch("");
               setPage(0);
             }}
+            data-testid="reset-search-button"
           >
             Reset
           </Button>
@@ -302,76 +312,113 @@ function Approvals() {
               loadEmployees();
               setExportModal(true);
             }}
+            data-testid="export-excel-button"
           >
             Export Excel
           </Button>
         </Box>
       </Box>
 
-      <TableContainer component={Paper} sx={{ flex: 1 }}>
-        <Table stickyHeader>
+      <TableContainer
+        component={Paper}
+        sx={{ flex: 1 }}
+        data-testid="approvals-table-container"
+      >
+        <Table stickyHeader data-testid="approvals-table">
           <TableHead>
             {viewType === "payslips" ? (
-              <TableRow>
-                <TableCell>Month</TableCell>
-                <TableCell>Year</TableCell>
-                <TableCell>NetPay</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Employee</TableCell>
-                <TableCell>Actions</TableCell>
+              <TableRow data-testid="payslips-header">
+                <TableCell data-testid="month-header">Month</TableCell>
+                <TableCell data-testid="year-header">Year</TableCell>
+                <TableCell data-testid="netpay-header">NetPay</TableCell>
+                <TableCell data-testid="status-header">Status</TableCell>
+                <TableCell data-testid="employee-header">Employee</TableCell>
+                <TableCell data-testid="actions-header">Actions</TableCell>
               </TableRow>
             ) : (
-              <TableRow>
-                <TableCell>Effective From</TableCell>
-                <TableCell>Gross CTC</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Employee</TableCell>
-                <TableCell>Actions</TableCell>
+              <TableRow data-testid="ctcs-header">
+                <TableCell data-testid="effective-from-header">
+                  Effective From
+                </TableCell>
+                <TableCell data-testid="gross-ctc-header">Gross CTC</TableCell>
+                <TableCell data-testid="status-header">Status</TableCell>
+                <TableCell data-testid="employee-header">Employee</TableCell>
+                <TableCell data-testid="actions-header">Actions</TableCell>
               </TableRow>
             )}
           </TableHead>
-          <TableBody>
+          <TableBody data-testid="approvals-table-body">
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center">
-                  <CircularProgress size={24} />
+              <TableRow data-testid="loading-row">
+                <TableCell
+                  colSpan={6}
+                  align="center"
+                  data-testid="loading-cell"
+                >
+                  <CircularProgress size={24} data-testid="loading-spinner" />
                 </TableCell>
               </TableRow>
             ) : records.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center">
+              <TableRow data-testid="no-records-row">
+                <TableCell
+                  colSpan={6}
+                  align="center"
+                  data-testid="no-records-cell"
+                >
                   No {viewType} found
                 </TableCell>
               </TableRow>
             ) : (
-              records.map((r) => (
-                <TableRow key={`${r.type}-${r.id}`} hover>
+              records.map((r, index) => (
+                <TableRow
+                  key={`${r.type}-${r.id}`}
+                  hover
+                  data-testid={`record-row-${index}`}
+                >
                   {viewType === "payslips" ? (
                     <>
-                      <TableCell>{r.month}</TableCell>
-                      <TableCell>{r.year}</TableCell>
-                      <TableCell>₹{r.netPay}</TableCell>
+                      <TableCell data-testid={`month-cell-${index}`}>
+                        {r.month}
+                      </TableCell>
+                      <TableCell data-testid={`year-cell-${index}`}>
+                        {r.year}
+                      </TableCell>
+                      <TableCell data-testid={`netpay-cell-${index}`}>
+                        ₹{r.netPay}
+                      </TableCell>
                     </>
                   ) : (
                     <>
-                      <TableCell>{formatDate(r.effectiveFrom)}</TableCell>
-                      <TableCell>₹{r.grossCTC}</TableCell>
+                      <TableCell data-testid={`effective-from-cell-${index}`}>
+                        {formatDate(r.effectiveFrom)}
+                      </TableCell>
+                      <TableCell data-testid={`gross-ctc-cell-${index}`}>
+                        ₹{r.grossCTC}
+                      </TableCell>
                     </>
                   )}
-                  <TableCell>{statusBadge(r)}</TableCell>
-                  <TableCell>
+                  <TableCell data-testid={`status-cell-${index}`}>
+                    {statusBadge(r)}
+                  </TableCell>
+                  <TableCell data-testid={`employee-cell-${index}`}>
                     {r.employee?.fullName
                       ? `${r.employee.fullName} (${r.employee.email})`
                       : "(Unknown)"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-testid={`actions-cell-${index}`}>
                     <Tooltip title="Review">
-                      <IconButton onClick={() => openReview(r)}>
+                      <IconButton
+                        onClick={() => openReview(r)}
+                        data-testid={`review-button-${index}`}
+                      >
                         <VisibilityIcon />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Download PDF">
-                      <IconButton onClick={() => downloadPdf(r)}>
+                      <IconButton
+                        onClick={() => downloadPdf(r)}
+                        data-testid={`download-pdf-button-${index}`}
+                      >
                         <FileDownloadIcon />
                       </IconButton>
                     </Tooltip>
@@ -385,25 +432,27 @@ function Approvals() {
 
       {/* Pagination */}
       <TablePagination
-  component="div"
-  count={totalItems}
-  page={page}
-  onPageChange={(e, newPage) => setPage(newPage)}
-  rowsPerPage={pageSize}
-  onRowsPerPageChange={(e) => {
-    setPageSize(parseInt(e.target.value, 10));
-    setPage(0);
-  }}
-  rowsPerPageOptions={[5, 10, 25, 50]}
-  sx={{ mt: 1 }}
-  nextIconButtonProps={{
-    disabled: records.length < pageSize || (page + 1) * pageSize >= totalItems
-  }}
-  backIconButtonProps={{
-    disabled: page === 0
-  }}
-  labelDisplayedRows={({ from, to }) => `${from}–${to}`}
-/>
+        component="div"
+        count={totalItems}
+        page={page}
+        onPageChange={(e, newPage) => setPage(newPage)}
+        rowsPerPage={pageSize}
+        onRowsPerPageChange={(e) => {
+          setPageSize(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[5, 10, 25, 50]}
+        sx={{ mt: 1 }}
+        nextIconButtonProps={{
+          disabled:
+            records.length < pageSize || (page + 1) * pageSize >= totalItems,
+        }}
+        backIconButtonProps={{
+          disabled: page === 0,
+        }}
+        labelDisplayedRows={({ from, to }) => `${from}–${to}`}
+        data-testid="pagination-controls"
+      />
 
       {/* Review Modal */}
       <Dialog
@@ -411,44 +460,47 @@ function Approvals() {
         onClose={() => setModal({ show: false, entity: null })}
         maxWidth="md"
         fullWidth
+        data-testid="review-modal"
       >
-        <DialogTitle>Review & Take Action</DialogTitle>
-        <DialogContent dividers>
+        <DialogTitle data-testid="review-modal-title">
+          Review & Take Action
+        </DialogTitle>
+        <DialogContent dividers data-testid="review-modal-content">
           {modal.entity && (
             <>
-              <Typography>
+              <Typography data-testid="employee-info">
                 <b>Employee:</b> {modal.entity.employee?.fullName} (
                 {modal.entity.employee?.email})
               </Typography>
               {modal.entity.type === "Payslip" && (
                 <>
-                  <Typography>
+                  <Typography data-testid="month-year-info">
                     <b>Month/Year:</b> {modal.entity.month}/{modal.entity.year}
                   </Typography>
-                  <Typography>
+                  <Typography data-testid="netpay-info">
                     <b>NetPay:</b> ₹{modal.entity.netPay}
                   </Typography>
-                  <Typography>
+                  <Typography data-testid="tax-info">
                     <b>Tax:</b> ₹{modal.entity.taxDeducted}
                   </Typography>
                 </>
               )}
               {modal.entity.type === "CTC" && (
                 <>
-                  <Typography>
+                  <Typography data-testid="effective-from-info">
                     <b>Effective From:</b>{" "}
                     {formatDate(modal.entity.effectiveFrom)}
                   </Typography>
-                  <Typography>
+                  <Typography data-testid="basic-info">
                     <b>Basic:</b> ₹{modal.entity.basic}
                   </Typography>
-                  <Typography>
+                  <Typography data-testid="hra-info">
                     <b>HRA:</b> ₹{modal.entity.hra}
                   </Typography>
-                  <Typography>
+                  <Typography data-testid="gross-ctc-info">
                     <b>Gross CTC:</b> ₹{modal.entity.grossCTC}
                   </Typography>
-                  <Typography>
+                  <Typography data-testid="tax-percent-info">
                     <b>Tax %:</b> {modal.entity.taxPercent}%
                   </Typography>
                 </>
@@ -456,14 +508,17 @@ function Approvals() {
             </>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setModal({ show: false, entity: null })}>
+        <DialogActions data-testid="review-modal-actions">
+          <Button
+            onClick={() => setModal({ show: false, entity: null })}
+            data-testid="close-modal-button"
+          >
             Close
           </Button>
           {modal.entity && modal.entity.type === "Payslip" && (
             <>
               {(() => {
-                const s = modal.entity.status; // consistent
+                const s = modal.entity.status;
                 const released = modal.entity.isReleased;
 
                 if (released) return null;
@@ -475,12 +530,14 @@ function Approvals() {
                       <Button
                         color="success"
                         onClick={() => changeStatus(modal.entity, "Approved")}
+                        data-testid="approve-payslip-button"
                       >
                         Approve
                       </Button>
                       <Button
                         color="error"
                         onClick={() => changeStatus(modal.entity, "Rejected")}
+                        data-testid="reject-payslip-button"
                       >
                         Reject
                       </Button>
@@ -495,12 +552,14 @@ function Approvals() {
                       <Button
                         color="primary"
                         onClick={() => releasePayslip(modal.entity)}
+                        data-testid="release-payslip-button"
                       >
                         Release
                       </Button>
                       <Button
                         color="error"
                         onClick={() => changeStatus(modal.entity, "Rejected")}
+                        data-testid="reject-approved-payslip-button"
                       >
                         Reject
                       </Button>
@@ -514,6 +573,7 @@ function Approvals() {
                     <Button
                       color="success"
                       onClick={() => changeStatus(modal.entity, "Approved")}
+                      data-testid="approve-rejected-payslip-button"
                     >
                       Approve
                     </Button>
@@ -534,12 +594,14 @@ function Approvals() {
                       <Button
                         color="success"
                         onClick={() => changeStatus(modal.entity, "Approved")}
+                        data-testid="approve-ctc-button"
                       >
                         Approve
                       </Button>
                       <Button
                         color="error"
                         onClick={() => changeStatus(modal.entity, "Rejected")}
+                        data-testid="reject-ctc-button"
                       >
                         Reject
                       </Button>
@@ -554,6 +616,7 @@ function Approvals() {
                       <Button
                         color="error"
                         onClick={() => changeStatus(modal.entity, "Rejected")}
+                        data-testid="reject-approved-ctc-button"
                       >
                         Reject
                       </Button>
@@ -567,6 +630,7 @@ function Approvals() {
                     <Button
                       color="success"
                       onClick={() => changeStatus(modal.entity, "Approved")}
+                      data-testid="approve-rejected-ctc-button"
                     >
                       Approve
                     </Button>
@@ -584,27 +648,47 @@ function Approvals() {
         onClose={() => setExportModal(false)}
         maxWidth="xs"
         fullWidth
+        data-testid="export-modal"
       >
-        <DialogTitle>Export as Excel</DialogTitle>
-        <DialogContent dividers>
+        <DialogTitle data-testid="export-modal-title">
+          Export as Excel
+        </DialogTitle>
+        <DialogContent dividers data-testid="export-modal-content">
           <TextField
             select
             fullWidth
             label="Select Employee"
             value={selectedEmp}
             onChange={(e) => setSelectedEmp(e.target.value)}
+            inputProps={{ "data-testid": "employee-select" }}
           >
-            <MenuItem value="">-- Choose Employee --</MenuItem>
+            <MenuItem value="" data-testid="default-employee-option">
+              -- Choose Employee --
+            </MenuItem>
             {employees.map((emp) => (
-              <MenuItem key={emp.id} value={emp.id}>
+              <MenuItem
+                key={emp.id}
+                value={emp.id}
+                data-testid={`employee-option-${emp.id}`}
+              >
                 {emp.fullName} ({emp.email})
               </MenuItem>
             ))}
           </TextField>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setExportModal(false)}>Cancel</Button>
-          <Button variant="contained" color="success" onClick={exportExcel}>
+        <DialogActions data-testid="export-modal-actions">
+          <Button
+            onClick={() => setExportModal(false)}
+            data-testid="cancel-export-button"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={exportExcel}
+            data-testid="confirm-export-button"
+          >
             Export
           </Button>
         </DialogActions>

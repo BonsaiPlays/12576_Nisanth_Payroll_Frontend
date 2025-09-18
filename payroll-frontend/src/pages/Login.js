@@ -67,7 +67,10 @@ function Login() {
     }
     try {
       await api.post("/auth/forgot-password/request", { email: forgotEmail });
-      showSnackbar("Reset request submitted. Please check your email.", "success");
+      showSnackbar(
+        "Reset request submitted. Please check your email.",
+        "success"
+      );
       setShowForgot(false);
       setForgotEmail("");
     } catch (err) {
@@ -85,15 +88,26 @@ function Login() {
       justifyContent="center"
       alignItems="center"
       sx={{ minHeight: "80vh" }}
+      data-testid="login-page"
     >
       <Grid item xs={10} sm={6} md={4}>
         <Card elevation={4}>
           <CardContent>
-            <Typography variant="h5" align="center" gutterBottom>
+            <Typography
+              variant="h5"
+              align="center"
+              gutterBottom
+              data-testid="login-title"
+            >
               Login
             </Typography>
 
-            <Box component="form" noValidate onSubmit={handleLogin}>
+            <Box
+              component="form"
+              noValidate
+              onSubmit={handleLogin}
+              data-testid="login-form"
+            >
               <TextField
                 label="Email"
                 type="text"
@@ -101,6 +115,7 @@ function Login() {
                 margin="normal"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                inputProps={{ "data-testid": "email-input" }}
               />
               <TextField
                 label="Password"
@@ -109,6 +124,7 @@ function Login() {
                 margin="normal"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                inputProps={{ "data-testid": "password-input" }}
               />
               <Button
                 type="submit"
@@ -116,13 +132,18 @@ function Login() {
                 color="primary"
                 fullWidth
                 sx={{ mt: 2 }}
+                data-testid="login-button"
               >
                 Login
               </Button>
             </Box>
 
             <Box mt={2} display="flex" justifyContent="space-between">
-              <Button variant="text" onClick={() => setShowForgot(true)}>
+              <Button
+                variant="text"
+                onClick={() => setShowForgot(true)}
+                data-testid="forgot-password-button"
+              >
                 Forgot Password?
               </Button>
             </Box>
@@ -135,9 +156,17 @@ function Login() {
         maxWidth="sm"
         open={showForgot}
         onClose={() => setShowForgot(false)}
+        data-testid="forgot-password-dialog"
       >
-        <DialogTitle>Forgot Password</DialogTitle>
-        <Box component="form" noValidate onSubmit={handleForgotSubmit}>
+        <DialogTitle data-testid="forgot-password-title">
+          Forgot Password
+        </DialogTitle>
+        <Box
+          component="form"
+          noValidate
+          onSubmit={handleForgotSubmit}
+          data-testid="forgot-password-form"
+        >
           <DialogContent>
             <TextField
               label="Email"
@@ -146,13 +175,23 @@ function Login() {
               margin="normal"
               value={forgotEmail}
               onChange={(e) => setForgotEmail(e.target.value)}
+              inputProps={{ "data-testid": "forgot-email-input" }}
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowForgot(false)} color="secondary">
+            <Button
+              onClick={() => setShowForgot(false)}
+              color="secondary"
+              data-testid="cancel-forgot-button"
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="contained" color="primary">
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              data-testid="submit-forgot-button"
+            >
               Submit Request
             </Button>
           </DialogActions>
